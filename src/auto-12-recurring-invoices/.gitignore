@@ -1,0 +1,22 @@
+﻿# Python / Django
+__pycache__/
+*.py[cod]
+db.sqlite3
+staticfiles/
+
+# Environment Secrets
+.env
+venv/
+env/
+
+# Frontend Build Artifacts
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+
+.env.*
+*.bak*
+sap_*.csv
+gl_*.csv
+cost_centers.csv
+invoice_log.csv

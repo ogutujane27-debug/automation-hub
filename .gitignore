@@ -1,0 +1,30 @@
+﻿# Environment & Secrets
+.env
+*/.env
+
+# Python Virtual Environments
+.venv/
+*/.venv/
+env/
+*/env/
+
+# Logs & Output Artifacts
+logs/
+*/logs/
+*.log
+
+# Python Cache
+__pycache__/
+*/__pycache__/
+*.pyc
+
+# Node / frontend
+node_modules/
+dist/
+
+# Local databases, backups, data exports
+db.sqlite3*
+*.sqlite3
+*.bak*
+*.csv
+data/

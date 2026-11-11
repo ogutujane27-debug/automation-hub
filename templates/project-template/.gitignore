@@ -1,0 +1,19 @@
+﻿# Environment & Secrets
+.env
+*/.env
+
+# Python Virtual Environments
+.venv/
+*/.venv/
+env/
+*/env/
+
+# Logs & Output Artifacts
+logs/
+*/logs/
+*.log
+
+# Python Cache
+__pycache__/
+*/__pycache__/
+*.pyc
