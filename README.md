@@ -17,5 +17,5 @@ Centralized command center and documentation index for all operational scripts, 
 ## 📂 Repository Structure
 
 *   `src/` — Individual source code repositories for each automation project.
-*   `templates/` — Standardized templates (like `project-template.md`) for documenting new workflows.
+*   `templates/` — Standardized templates (`project-template.md`) for documenting new workflows.
 *   `docs/` — High-level architecture guides, network diagrams, and operational notes.
