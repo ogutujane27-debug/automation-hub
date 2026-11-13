@@ -28,3 +28,7 @@ db.sqlite3*
 *.bak*
 *.csv
 data/
+
+# OS files
+Thumbs.db
+.DS_Store
