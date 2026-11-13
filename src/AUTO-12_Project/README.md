@@ -24,7 +24,8 @@ Safety: nothing is written to SAP unless the sync is run with execute, and execu
 ## How to run
 - Backend: Django app (recurring_invoices) with a REST API.
 - Dashboard: React/Vite app in frontend\.
-- run_app.bat starts the app. run_full_sync.ps1 runs the SAP sync.
+- run_app.bat opens two windows: the Django backend (runserver) and the React dashboard (npm run dev). Both are development servers.
+- run_full_sync.ps1 runs three steps: sync_sap_invoices, send_failure_alerts, then check_today.py to verify today's invoices.
 
 ## Status
 - Built and tested in the dev company only.
