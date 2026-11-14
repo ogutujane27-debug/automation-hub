@@ -1,4 +1,4 @@
-﻿# automation-hub
+# automation-hub
 
 All my automations in one place. Each project lives in its own folder under src\ with a README (what it does and its pipeline), a docs\ folder with the full documentation, and a .env.example listing its settings.
 
@@ -7,7 +7,7 @@ All my automations in one place. Each project lives in its own folder under src\
 | Project | What it does | Docs |
 |---|---|---|
 | [Kubo_Attachment_Automation](src/Kubo_Attachment_Automation) | Links Kubo's signed delivery PDFs to their SAP delivery notes | [Documentation](src/Kubo_Attachment_Automation/docs) |
-| [AUTO-12_Project](src/AUTO-12_Project) | Recurring monthly invoices for IAL and AZL, with approvals and an audit trail, posted to SAP | to be added |
+| [AUTO-12_Project](src/AUTO-12_Project) | Recurring monthly invoices for IAL and AZL, with approvals and an audit trail, posted to SAP | [Documentation](AUTO-12_Project/docs/) |
 
 ## How the hub works
 
