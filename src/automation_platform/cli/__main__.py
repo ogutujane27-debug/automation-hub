@@ -4,12 +4,15 @@ import argparse
 import json
 import signal
 import sys
+from datetime import time
 from threading import Event
 
 from ..runtime import AutomationPlatform
 from ..bootstrap import load_jobs
 from ..scheduler.engine import SchedulerEngine
+from ..scheduler.models import ScheduleDefinition
 from ..scheduler.service import SchedulerService
+from ..api.server import run_server
 
 
 def build_parser():
@@ -49,6 +52,57 @@ def build_parser():
         help="Seconds between scheduler checks (default: 1.0)",
     )
 
+    serve_parser = subparsers.add_parser(
+        "serve", help="Start the HTTP API and automation scheduler"
+    )
+    serve_parser.add_argument(
+        "--host", default="127.0.0.1",
+        help="HTTP server host (default: 127.0.0.1)",
+    )
+    serve_parser.add_argument(
+        "--port", type=int, default=8000,
+        help="HTTP server port (default: 8000)",
+    )
+    serve_parser.add_argument(
+        "--poll-interval", type=float, default=1.0,
+        help="Seconds between scheduler checks (default: 1.0)",
+    )
+
+    schedule_parser = subparsers.add_parser(
+        "schedule", help="Manage automation schedules"
+    )
+    schedule_subparsers = schedule_parser.add_subparsers(
+        dest="schedule_action", required=True
+    )
+
+    schedule_list_parser = schedule_subparsers.add_parser(
+        "list", help="List active and paused schedules"
+    )
+    schedule_list_parser.add_argument("--job", dest="job_name")
+
+    schedule_add_parser = schedule_subparsers.add_parser(
+        "add", help="Create an automation schedule"
+    )
+    schedule_add_parser.add_argument("job_name")
+    schedule_add_parser.add_argument(
+        "--frequency", required=True,
+        choices=["interval", "daily", "weekly"]
+    )
+    schedule_add_parser.add_argument(
+        "--interval-seconds", type=int
+    )
+    schedule_add_parser.add_argument("--run-time")
+    schedule_add_parser.add_argument(
+        "--weekdays",
+        help="Comma-separated weekdays for weekly schedules"
+    )
+
+    for action in ("pause", "resume", "remove"):
+        action_parser = schedule_subparsers.add_parser(
+            action, help=f"{action.capitalize()} a schedule"
+        )
+        action_parser.add_argument("schedule_id")
+
     return parser
 
 
@@ -85,9 +139,187 @@ def run_scheduler(platform, poll_interval):
     return 0
 
 
+WEEKDAYS = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
+
+
+def handle_schedule_command(platform, args):
+    engine = SchedulerEngine(platform)
+    store = platform.schedule_store
+
+    if args.schedule_action == "list":
+        schedules = store.list_schedules(enabled_only=False)
+
+        if args.job_name:
+            schedules = [
+                row for row in schedules
+                if row["job_name"] == args.job_name
+            ]
+
+        if not schedules:
+            print("No schedules found.")
+            return 0
+
+        for row in schedules:
+            status = "active" if row["enabled"] else "paused"
+            print(
+                f"{row['schedule_id']} | "
+                f"{row['job_name']} | "
+                f"{row['frequency']} | "
+                f"{status} | "
+                f"Next run: {row['next_run_at'] or 'Not scheduled'}"
+            )
+
+        return 0
+
+    if args.schedule_action == "add":
+        try:
+            if args.frequency == "interval":
+                if (
+                    args.interval_seconds is None
+                    or args.interval_seconds <= 0
+                    or args.run_time is not None
+                    or args.weekdays is not None
+                ):
+                    raise ValueError(
+                        "Interval schedules require a positive "
+                        "--interval-seconds and do not accept "
+                        "--run-time or --weekdays."
+                    )
+
+                schedule = ScheduleDefinition(
+                    job_name=args.job_name,
+                    frequency="interval",
+                    interval_seconds=args.interval_seconds,
+                )
+
+            elif args.frequency == "daily":
+                if (
+                    args.run_time is None
+                    or args.interval_seconds is not None
+                    or args.weekdays is not None
+                ):
+                    raise ValueError(
+                        "Daily schedules require --run-time HH:MM "
+                        "and do not accept --interval-seconds or --weekdays."
+                    )
+
+                schedule = ScheduleDefinition(
+                    job_name=args.job_name,
+                    frequency="daily",
+                    run_time=time.fromisoformat(args.run_time),
+                )
+
+            else:
+                if (
+                    args.run_time is None
+                    or args.weekdays is None
+                    or args.interval_seconds is not None
+                ):
+                    raise ValueError(
+                        "Weekly schedules require --run-time HH:MM "
+                        "and --weekdays."
+                    )
+
+                weekday_names = [
+                    name.strip().lower()
+                    for name in args.weekdays.split(",")
+                ]
+
+                if (
+                    not weekday_names
+                    or any(name not in WEEKDAYS for name in weekday_names)
+                ):
+                    raise ValueError(
+                        "Invalid weekday. Use monday,tuesday,wednesday,"
+                        "thursday,friday,saturday,sunday."
+                    )
+
+                weekdays = tuple(WEEKDAYS[name] for name in weekday_names)
+
+                if len(set(weekdays)) != len(weekdays):
+                    raise ValueError("Weekdays must not contain duplicates.")
+
+                schedule = ScheduleDefinition(
+                    job_name=args.job_name,
+                    frequency="weekly",
+                    run_time=time.fromisoformat(args.run_time),
+                    weekdays=weekdays,
+                )
+
+            engine.add_schedule(schedule)
+
+        except (ValueError, KeyError) as exc:
+            print(f"Unable to add schedule: {exc}", file=sys.stderr)
+            return 1
+
+        print(f"Schedule created: {schedule.schedule_id}")
+        return 0
+
+    if args.schedule_action == "pause":
+        if engine.pause_schedule(args.schedule_id):
+            print(f"Schedule paused: {args.schedule_id}")
+            return 0
+
+        print(
+            f"Unable to pause schedule: {args.schedule_id}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.schedule_action == "resume":
+        try:
+            resumed = engine.resume_schedule(args.schedule_id)
+        except (ValueError, KeyError) as exc:
+            print(f"Unable to resume schedule: {exc}", file=sys.stderr)
+            return 1
+
+        if resumed:
+            print(f"Schedule resumed: {args.schedule_id}")
+            return 0
+
+        print(
+            f"Unable to resume schedule: {args.schedule_id}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.schedule_action == "remove":
+        if engine.remove_schedule(args.schedule_id):
+            print(f"Schedule removed: {args.schedule_id}")
+            return 0
+
+        print(
+            f"Schedule not found: {args.schedule_id}",
+            file=sys.stderr,
+        )
+        return 1
+
+    return 1
+
+
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "serve":
+        try:
+            platform = load_jobs(AutomationPlatform())
+            return run_server(
+                platform,
+                host=args.host,
+                port=args.port,
+                poll_interval=args.poll_interval,
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
 
     if args.command == "scheduler":
         try:
@@ -97,6 +329,9 @@ def main(argv=None):
             parser.error(str(exc))
 
     platform = load_jobs(AutomationPlatform())
+
+    if args.command == "schedule":
+        return handle_schedule_command(platform, args)
 
     if args.command == "list":
         jobs = platform.list_jobs()

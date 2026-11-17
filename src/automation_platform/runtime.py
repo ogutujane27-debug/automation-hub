@@ -51,6 +51,10 @@ class AutomationPlatform:
     def list_jobs(self) -> list[JobDefinition]:
         return self.registry.list_jobs()
 
+    def get_job(self, name: str) -> JobDefinition:
+        """Retrieve a registered automation by name."""
+        return self.registry.get(name)
+
     def run_job(
         self,
         name: str,
